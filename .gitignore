@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# dromos data — personal health + location data, local-only, never committed
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Secrets — Garmin/Coros credentials and session tokens
+.env
+.garth/
+*.token
+tokens/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Temp / logs
+*.tmp
+*.log
+
+# Private working files, not part of the public toolkit
+CLAUDE.md
+ROADMAP.md
+posts/
