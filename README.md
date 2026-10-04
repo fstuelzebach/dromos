@@ -51,3 +51,7 @@ Activity files contain GPS tracks that usually start at your front door. Keep th
 ## Disclaimer
 
 Dromos is not affiliated with Garmin or Coros. Vendor endpoints and formats change; check the current behaviour before relying on it.
+
+## License
+
+[MIT](LICENSE)
