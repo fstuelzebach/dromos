@@ -30,7 +30,13 @@ Thumbs.db
 *.tmp
 *.log
 
-# Private working files, not part of the public toolkit
+# Social-media plans and drafts: not part of this repo
+posts/
+social/
+linkedin/
+*.draft.md
+
+# Private working notes (personal plans, assistant instructions)
 CLAUDE.md
 ROADMAP.md
-posts/
+.claude/
