@@ -10,7 +10,7 @@ Dromos is a Python toolkit with a clear focus on running. It does three things:
 
 *Dromos* (δρόμος) is Greek for a run, a race and the track it is run on.
 
-> **Status: early development.** The package skeleton and CLI exist; extractors, parsers and charts are being built.
+> **Status: early development.** The Garmin extractor works (activities, per-activity extras, wellness; resumable, `dromos garmin verify` checks completeness). Parsers and charts are still to be built.
 
 ## Design principles
 

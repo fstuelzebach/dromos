@@ -13,6 +13,8 @@ dependencies = [
     "pydantic==2.13.5",
     "pydantic-settings==2.15.0",
     "rich==15.0.0",
+    "garminconnect==0.3.17",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]
