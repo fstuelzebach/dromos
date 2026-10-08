@@ -155,3 +155,37 @@ def garmin_verify(fix: bool = typer.Option(False, help="Delete corrupt files so 
     raw = load_settings().raw_dir
     garmin.setup_logging(raw)
     garmin.log_report(garmin.verify(raw, fix=fix))
+
+
+coros_app = typer.Typer(help="Prepare the Garmin archive for import into COROS Training Hub.")
+app.add_typer(coros_app, name="coros")
+
+
+def _coros_dir():
+    return load_settings().processed_dir / "coros_import"
+
+
+@coros_app.command("prepare")
+def coros_prepare(max_files: int = typer.Option(100, help="Files per zip; raise it once COROS accepted a first batch")):
+    """Build upload-ready zips (runs first) in data/processed/coros_import/. Offline, rebuildable."""
+    from dromos import coros
+
+    out = _coros_dir()
+    result = coros.prepare(load_settings().raw_dir, out, max_files=max_files)
+    table = Table("batch", "group", "files", "MB", "from", "to")
+    for b in result["batches"]:
+        table.add_row(b["name"], b["group"], str(len(b["items"])), f"{b['zip_bytes'] / 2**20:.1f}",
+                      b["items"][0].start[:10], b["items"][-1].start[:10])
+    console.print(table)
+    skipped = result["skipped"]
+    console.print(f"[yellow]{len(skipped)} skipped[/yellow] (too small for COROS or unreadable); see {out / 'manifest.json'}")
+    console.print(f"Upload at t.coros.com: Activity List > Import Data. Then: dromos coros uploaded <batch>")
+
+
+@coros_app.command("uploaded")
+def coros_uploaded(batch: str):
+    """Record that a batch was uploaded to COROS, so it is not prepared again."""
+    from dromos import coros
+
+    n = coros.mark_uploaded(_coros_dir(), batch)
+    console.print(f"[green]{batch}: {n} activities recorded as uploaded.[/green]")

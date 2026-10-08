@@ -100,3 +100,41 @@ def test_extras_are_idempotent_and_verify_sees_gaps(tmp_path):
     assert garmin.verify(tmp_path, wellness=False).extras_missing == {}
     (tmp_path / "activity_extras" / "gear" / "3.json").unlink()
     assert garmin.verify(tmp_path, wellness=False).extras_missing == {"gear": 1}
+
+
+def _coros_raw(tmp_path):
+    from dromos import coros  # noqa: F401
+    lists = tmp_path / "activity_lists" / "s1"
+    lists.mkdir(parents=True)
+    acts = tmp_path / "activities"
+    acts.mkdir()
+    spec = {1: ("yoga", 50_000), 2: ("running", 50_000), 3: ("running", 100), 4: ("running", 60_000),
+            5: ("strength_training", 30_000)}
+    rows = []
+    for i, (kind, size) in spec.items():
+        rows.append({"activityId": i, "activityType": {"typeKey": kind},
+                     "startTimeLocal": f"2024-01-0{i} 07:00:00"})
+        with zipfile.ZipFile(acts / f"{i}.zip", "w") as z:
+            z.writestr(f"{i}_ACTIVITY.fit", b"x" * size)
+    (lists / "page_000000.json").write_text(json.dumps(rows))
+
+
+def test_coros_plan_orders_runs_first_and_skips_small(tmp_path):
+    from dromos import coros
+    _coros_raw(tmp_path)
+    r = coros.plan(tmp_path, max_files=1)
+    assert [(b["group"], [c.activity_id for c in b["items"]]) for b in r["batches"]] == [
+        ("running", [2]), ("running", [4]), ("strength", [5]), ("other", [1])]
+    assert [s["activity_id"] for s in r["skipped"]] == [3]
+
+
+def test_coros_prepare_writes_zips_and_uploaded_are_not_repeated(tmp_path):
+    from dromos import coros
+    _coros_raw(tmp_path)
+    out = tmp_path / "out"
+    coros.prepare(tmp_path, out)
+    with zipfile.ZipFile(out / "coros_001_running.zip") as z:
+        assert sorted(z.namelist()) == ["2.fit", "4.fit"]
+    assert coros.mark_uploaded(out, "coros_001_running") == 2
+    r = coros.prepare(tmp_path, out)
+    assert [b["name"] for b in r["batches"]] == ["coros_002_strength", "coros_003_other"]
