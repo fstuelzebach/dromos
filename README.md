@@ -10,7 +10,9 @@ Dromos is a Python toolkit with a clear focus on running. It does three things:
 
 *Dromos* (δρόμος) is Greek for a run, a race and the track it is run on.
 
-> **Status: early development.** The Garmin extractor works (activities, per-activity extras, wellness; resumable, `dromos garmin verify` checks completeness). Parsers and charts are still to be built.
+> **Status: early development.** Coros is now the primary data source: the Garmin history (2203 activities) was imported into Coros Training Hub in October 2026, and `dromos coros login` connects to it (activity list verified; FIT download verified on one recent and one imported 2021 run). Parsers and charts are still to be built.
+
+> **Garmin archive: frozen.** The Garmin extractor (`dromos garmin ...`) is complete for activities and per-activity extras and is kept as is, but it is not developed further and wellness was not exported. The Garmin originals in `data/raw/` stay as the offline backup; day-to-day work reads from Coros.
 
 ## Design principles
 
@@ -28,7 +30,7 @@ git clone <repo-url> && cd dromos
 python -m venv .venv
 # Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
 pip install -e ".[dev]"
-cp .env.example .env      # then fill in your Garmin login
+cp .env.example .env      # then fill in your Coros login (Garmin only if you want the frozen exporter)
 pytest
 dromos status
 ```
