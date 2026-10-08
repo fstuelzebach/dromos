@@ -182,6 +182,20 @@ def coros_prepare(max_files: int = typer.Option(100, help="Files per zip; raise 
     console.print(f"Upload at t.coros.com: Activity List > Import Data. Then: dromos coros uploaded <batch>")
 
 
+@coros_app.command("login")
+def coros_login():
+    """Check the COROS connection: log in with .env credentials (or reuse the saved token) and count activities."""
+    from dromos import coros_api
+
+    try:
+        client = coros_api.CorosClient.connect()
+        page = client.list_activities_page(1, size=1)
+    except coros_api.CorosError as e:
+        console.print(f"[red]COROS: {e}[/red]")
+        raise typer.Exit(1)
+    console.print(f"[green]Connected (region {client.region}).[/green] Activities in Training Hub: {page.get('count', '?')}")
+
+
 @coros_app.command("uploaded")
 def coros_uploaded(batch: str):
     """Record that a batch was uploaded to COROS, so it is not prepared again."""
