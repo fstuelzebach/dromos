@@ -164,3 +164,47 @@ class CorosClient:
         self._last = time.monotonic()
         resp.raise_for_status()
         return resp.content
+
+
+# --- export to data/raw/coros/ ---------------------------------------------------------------
+
+# COROS sportType codes seen in the archive: 100/101 run types, 402 strength.
+EXPORT_GROUPS = {"running": (100, 101), "strength": (402,)}
+
+
+def _safe_id(label_id) -> str:
+    text = str(label_id)
+    if not text.isalnum():
+        raise CorosError(f"unexpected activity id {text!r}")
+    return text
+
+
+def export_activities(client: CorosClient, raw_dir: Path, groups: list[str], limit: int | None = None) -> dict:
+    """Save the original FIT file and the list row of each activity to raw_dir/coros/.
+
+    Idempotent: an activity with a .fit on disk is skipped. The .json row is written after the .fit,
+    so a missing .json means the download was interrupted (the next run fetches both again).
+    Groups run in the given order. Returns counts; raises CorosError after repeated errors.
+    """
+    from dromos.garmin import _atomic_write, _write_json
+
+    out = raw_dir / "coros"
+    wanted = {t: g for g in groups for t in EXPORT_GROUPS[g]}
+    rows = [r for r in client.list_activities() if r.get("sportType") in wanted]
+    order = {g: i for i, g in enumerate(groups)}
+    rows.sort(key=lambda r: (order[wanted[r["sportType"]]], r.get("startTime") or 0))
+    done = skipped = 0
+    for row in rows:
+        aid = _safe_id(row["labelId"])
+        fit, meta = out / f"{aid}.fit", out / f"{aid}.json"
+        if fit.exists() and meta.exists():
+            skipped += 1
+            continue
+        if limit is not None and done >= limit:
+            break
+        _atomic_write(fit, client.download_fit(aid, row["sportType"]))
+        _write_json(meta, row)
+        done += 1
+        if done % 25 == 0:
+            log.info("exported %d (of %d to do)", done, len(rows) - skipped)
+    return {"downloaded": done, "skipped": skipped, "matching": len(rows)}

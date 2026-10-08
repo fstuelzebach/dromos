@@ -196,6 +196,33 @@ def coros_login():
     console.print(f"[green]Connected (region {client.region}).[/green] Activities in Training Hub: {page.get('count', '?')}")
 
 
+@coros_app.command("export")
+def coros_export(
+    groups: list[str] = typer.Option(["running", "strength"], "--group", help="running and/or strength; order = priority"),
+    limit: int = typer.Option(None, help="Stop after this many new downloads (for a first test)"),
+):
+    """Download original FIT files + list rows of COROS activities into data/raw/coros/. Resumable."""
+    import logging
+
+    from dromos import coros_api
+
+    unknown = set(groups) - set(coros_api.EXPORT_GROUPS)
+    if unknown:
+        raise typer.BadParameter(f"unknown group(s) {sorted(unknown)}; use {sorted(coros_api.EXPORT_GROUPS)}")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    try:
+        client = coros_api.CorosClient.connect()
+        result = coros_api.export_activities(client, load_settings().raw_dir, groups, limit)
+    except coros_api.CorosError as e:
+        console.print(f"[red]STOPPED: {e} (progress is saved; re-run to continue)[/red]")
+        raise typer.Exit(1)
+    except KeyboardInterrupt:
+        console.print("[yellow]interrupted (everything fetched so far is saved)[/yellow]")
+        raise typer.Exit(130)
+    console.print(f"[green]{result['downloaded']} downloaded, {result['skipped']} already on disk[/green] "
+                  f"({result['matching']} matching activities in COROS)")
+
+
 @coros_app.command("uploaded")
 def coros_uploaded(batch: str):
     """Record that a batch was uploaded to COROS, so it is not prepared again."""

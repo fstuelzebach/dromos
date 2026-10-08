@@ -94,3 +94,39 @@ def test_region_validation(monkeypatch):
     monkeypatch.setattr(coros_api, "load_dotenv", lambda: None)
     with pytest.raises(CorosError):
         coros_api.credentials()
+
+
+def test_export_is_idempotent_and_runs_first(client, tmp_path):
+    rows = [
+        {"labelId": "s1", "sportType": 402, "startTime": 1},
+        {"labelId": "r2", "sportType": 100, "startTime": 3},
+        {"labelId": "r1", "sportType": 101, "startTime": 2},
+        {"labelId": "y1", "sportType": 999, "startTime": 0},
+    ]
+    client.list_activities = lambda *a, **k: iter(rows)
+    fetched = []
+    client.download_fit = lambda aid, st: fetched.append(aid) or b"FIT" + aid.encode()
+
+    first = coros_api.export_activities(client, tmp_path, ["running", "strength"])
+    assert fetched == ["r1", "r2", "s1"]
+    assert first == {"downloaded": 3, "skipped": 0, "matching": 3}
+    assert (tmp_path / "coros" / "r1.fit").read_bytes() == b"FITr1"
+
+    fetched.clear()
+    second = coros_api.export_activities(client, tmp_path, ["running", "strength"])
+    assert fetched == [] and second["skipped"] == 3
+
+
+def test_export_limit_and_interrupted_download_is_retried(client, tmp_path):
+    rows = [{"labelId": f"r{i}", "sportType": 100, "startTime": i} for i in range(3)]
+    client.list_activities = lambda *a, **k: iter(rows)
+    client.download_fit = lambda aid, st: b"x"
+    assert coros_api.export_activities(client, tmp_path, ["running"], limit=1)["downloaded"] == 1
+    (tmp_path / "coros" / "r0.json").unlink()  # fit without row = interrupted
+    assert coros_api.export_activities(client, tmp_path, ["running"])["downloaded"] == 3
+
+
+def test_export_rejects_odd_ids(client, tmp_path):
+    client.list_activities = lambda *a, **k: iter([{"labelId": "../x", "sportType": 100}])
+    with pytest.raises(CorosError):
+        coros_api.export_activities(client, tmp_path, ["running"])
