@@ -34,6 +34,7 @@ class FakeSession:
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(coros_api, "TOKEN_FILE", tmp_path / "session.json")
+    monkeypatch.setattr(coros_api.time, "sleep", lambda s: None)
     return CorosClient("eu", token="tok", throttle=0)
 
 
@@ -73,12 +74,18 @@ def test_invalid_token_result_raises(client):
 
 
 def test_stops_after_repeated_errors(client):
-    client.http = FakeSession([FakeResponse({}, status=500)] * 3)
+    client.http = FakeSession([FakeResponse({}, status=500)] * 9)
     for _ in range(2):
         with pytest.raises(CorosError, match="request failed"):
             client.list_activities_page(1)
     with pytest.raises(CorosError, match="in a row"):
         client.list_activities_page(1)
+
+
+def test_transient_error_is_retried(client):
+    client.http = FakeSession([FakeResponse({}, status=502),
+                               FakeResponse({"result": "0000", "data": {"dataList": []}})])
+    assert client.list_activities_page(1) == {"dataList": []}
 
 
 def test_download_fit_two_step(client):

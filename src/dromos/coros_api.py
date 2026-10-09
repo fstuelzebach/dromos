@@ -35,6 +35,8 @@ REGIONS = {
 FIT_FILE_TYPE = 4  # as used by community clients; unverified
 THROTTLE_SECONDS = 1.5
 MAX_CONSECUTIVE_ERRORS = 3
+RETRIES = 3  # attempts per call before it counts as failed
+BACKOFF_SECONDS = 5.0
 
 
 class CorosError(RuntimeError):
@@ -116,21 +118,34 @@ class CorosClient:
         if wait > 0:
             time.sleep(wait)
         headers = {"accesstoken": self.token} if auth else {}
-        try:
-            resp = self.http.request(method, self.base + path, headers=headers, timeout=30, **kw)
-            self._last = time.monotonic()
-            resp.raise_for_status()
-            data = resp.json()
-        except (requests.RequestException, ValueError) as e:
-            self._errors += 1
-            if self._errors >= MAX_CONSECUTIVE_ERRORS:
-                raise CorosError(f"{self._errors} errors in a row, stopping: {type(e).__name__}") from None
-            raise CorosError(f"request failed: {type(e).__name__}") from None
+        data = self._retrying(lambda: self.http.request(method, self.base + path, headers=headers, timeout=30, **kw),
+                              lambda resp: resp.json())
         self._errors = 0
         # COROS answers HTTP 200 with result != "0000" for logical errors such as an invalid token.
         if auth and data.get("result") not in (None, "0000"):
             raise CorosError(f"{path}: {data.get('message') or data.get('result')}")
         return data
+
+    def _retrying(self, send, parse):
+        """Run send() up to RETRIES times with backoff; MAX_CONSECUTIVE_ERRORS failed calls in a row stop everything."""
+        for attempt in range(1, RETRIES + 1):
+            try:
+                resp = send()
+                self._last = time.monotonic()
+                resp.raise_for_status()
+                result = parse(resp)
+                self._errors = 0
+                return result
+            except (requests.RequestException, ValueError) as e:
+                self._last = time.monotonic()
+                log.warning("COROS request failed (%s), attempt %d/%d", type(e).__name__, attempt, RETRIES)
+                if attempt < RETRIES:
+                    time.sleep(BACKOFF_SECONDS * attempt)
+                    continue
+                self._errors += 1
+                if self._errors >= MAX_CONSECUTIVE_ERRORS:
+                    raise CorosError(f"{self._errors} failed calls in a row, stopping: {type(e).__name__}") from None
+                raise CorosError(f"request failed: {type(e).__name__}") from None
 
     # --- activities ---------------------------------------------------------------------
 
@@ -160,10 +175,7 @@ class CorosClient:
         url = (info.get("data") or {}).get("fileUrl")
         if not url:
             raise CorosError(f"no file url for activity {label_id}")
-        resp = self.http.get(url, timeout=60)
-        self._last = time.monotonic()
-        resp.raise_for_status()
-        return resp.content
+        return self._retrying(lambda: self.http.get(url, timeout=60), lambda resp: resp.content)
 
 
 # --- export to data/raw/coros/ ---------------------------------------------------------------
